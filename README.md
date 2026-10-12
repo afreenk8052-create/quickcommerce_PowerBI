@@ -1,80 +1,102 @@
-## 1. Business Problem
-Quick-commerce companies promise delivery in 15-25 minutes. Management needs to know:
-- Which cities and stores miss their delivery promise, and why?
-- When (hour of day) do delays peak?
-- Which categories and customer segments drive revenue?
-- How do delays affect customer ratings?
+Quick-Commerce Dark Store Operations & Delivery Performance Dashboard
 
-## 2. Dataset
-| File | Rows | Description |
-|---|---|---|
-| quickcommerce_orders.csv | 8,000 | Fact table: one row per order |
-| dark_stores.csv | 31 | Dimension table: store details |
+An individual Power BI project analysing delivery speed, delays, revenue and customer ratings across 31 dark stores in 8 Indian cities.
 
-Key columns in orders: Order_ID, Order_Date, Order_Hour, Store_ID, City, Category, Customer_Segment, Payment_Mode, Items_Count, Order_Value, Discount, Delivery_Fee, Net_Revenue, Prep_Time_Min, Travel_Time_Min, Delivery_Time_Min, Promised_Time_Min, Delivery_Status, Rating, Delivery_Partner_ID.
-(Rating is blank for cancelled orders - this is intentional.)
+Author: [Your Name] | Course: [Course / Batch Name] | Submitted: October 2026
 
-## 3. Load & Model (Power BI Desktop)
-1. Home > Get Data > Text/CSV > load both files > **Transform Data**.
-2. In Power Query: set Order_Date to *Date*, numeric columns to *Decimal Number*, Order_Hour and Items_Count to *Whole Number*. Check that Rating is left blank (not 0) for cancelled orders. Close & Apply.
-3. Model view: link `dark_stores[Store_ID]` (1) -> `orders[Store_ID]` (many), single direction.
-4. Create a Date table (Modeling > New Table):
-```DAX
-DateTable = ADDCOLUMNS(CALENDAR(DATE(2026,1,1), DATE(2026,12,31)),
-    "Year", YEAR([Date]), "MonthNo", MONTH([Date]),
-    "Month", FORMAT([Date], "MMM"), "Weekday", FORMAT([Date], "ddd"),
-    "WeekdayNo", WEEKDAY([Date], 2))
-```
+📌 Table of Contents
+Project Overview
+Business Problem & Objectives
+Dataset
+Tools Used
+Data Model
+DAX Measures
+Dashboard Pages
+Key Insights
+Recommendations
+Repository Structure
+How to Run
+Limitations & Future Work
+📖 Project Overview
 
-## 4. DAX Measures
-```DAX
-Total Orders = COUNTROWS(orders)
-Delivered Orders = CALCULATE([Total Orders], orders[Delivery_Status] <> "Cancelled")
-Total Revenue = SUM(orders[Net_Revenue])
-Avg Order Value = DIVIDE([Total Revenue], [Delivered Orders])
-Total Discount = SUM(orders[Discount])
-Discount % = DIVIDE([Total Discount], SUM(orders[Order_Value]))
+Quick-commerce companies (Blinkit, Zepto, Swiggy Instamart and similar) promise delivery in about 20 minutes from small local warehouses called dark stores. This project builds an interactive Power BI dashboard that helps operations managers see where and when those promises are missed, and what it costs in revenue and customer satisfaction.
+
+🎯 Business Problem & Objectives
+
+Problem: Delayed deliveries reduce customer ratings and repeat orders, but management cannot easily see which cities, stores or time slots cause the delays.
+
+Objectives
+
+Track core KPIs: orders, net revenue, average order value, on-time %, cancellation % and average rating.
+Identify the cities and stores with the weakest delivery performance.
+Find the peak hours when delays rise.
+Measure how delays affect customer ratings.
+Understand revenue by category, city and customer segment, and the effect of discounts.
+📂 Dataset
+
+⚠️ Note: The dataset is synthetic, generated with Python (scripts/generate_dataset.py) for academic purposes. It is modelled on typical quick-commerce operations in India and is not real company data.
+
+File	Rows	Description
+data/quickcommerce_orders.csv	8,000	One row per order (Jan–Sep 2026)
+data/dark_stores.csv	31	One row per dark store
+
+Orders table columns
+
+Column	Description
+Order_ID, Order_Date, Order_Hour	Order identifier and timing
+Store_ID, City	Dark store that fulfilled the order and its city
+Category	Product category (8 categories)
+Customer_Segment	New / Regular / Premium
+Payment_Mode	UPI / Card / Cash on Delivery / Wallet
+Items_Count	Number of items in the order
+Order_Value, Discount, Delivery_Fee, Net_Revenue	Money columns in ₹ (Net_Revenue is 0 for cancelled orders)
+Prep_Time_Min, Travel_Time_Min, Delivery_Time_Min	Time to pack, time to travel, and total
+Promised_Time_Min	Delivery promise (20 min, or 25 min for Pharmacy and Electronics)
+Delivery_Status	On Time / Delayed / Cancelled
+Rating	Customer rating, 1–5 (blank for cancelled orders, intentionally)
+Delivery_Partner_ID	Rider identifier
+
+Stores table columns: Store_ID, City, Area, Capacity_Orders_Per_Day, Staff_Count, Opened_Year.
+
+🛠 Tools Used
+Microsoft Power BI Desktop: data modelling, DAX and dashboards
+Power Query: data cleaning and type conversion
+Python (pandas, NumPy, Matplotlib): dataset generation and preview charts
+GitHub: version control and submission
+🧩 Data Model
+
+A simple star schema:
+
+dark_stores (Store_ID) 1 ───< * orders (Store_ID) *>─── 1 DateTable (Date)
+orders is the fact table; dark_stores and DateTable are dimension tables.
+A custom DateTable is created with DAX, and Month and Weekday are sorted using their number columns.
+🧮 DAX Measures
+DAX
+Total Orders      = COUNTROWS(orders)
+Delivered Orders  = CALCULATE([Total Orders], orders[Delivery_Status] <> "Cancelled")
+Total Revenue     = SUM(orders[Net_Revenue])
+Avg Order Value   = DIVIDE([Total Revenue], [Delivered Orders])
+Discount %        = DIVIDE(SUM(orders[Discount]), SUM(orders[Order_Value]))
 Avg Delivery Time = CALCULATE(AVERAGE(orders[Delivery_Time_Min]), orders[Delivery_Status] <> "Cancelled")
-On-Time % = DIVIDE(CALCULATE([Total Orders], orders[Delivery_Status] = "On Time"), [Total Orders])
-Delay % = DIVIDE(CALCULATE([Total Orders], orders[Delivery_Status] = "Delayed"), [Total Orders])
-Cancellation % = DIVIDE(CALCULATE([Total Orders], orders[Delivery_Status] = "Cancelled"), [Total Orders])
-Avg Rating = AVERAGE(orders[Rating])
-Revenue MoM % = VAR cur = [Total Revenue]
-    VAR prev = CALCULATE([Total Revenue], DATEADD(DateTable[Date], -1, MONTH))
-    RETURN DIVIDE(cur - prev, prev)
-Store Utilisation % = DIVIDE([Total Orders] / 273, SUM(dark_stores[Capacity_Orders_Per_Day]))
-```
+On-Time %         = DIVIDE(CALCULATE([Total Orders], orders[Delivery_Status] = "On Time"), [Total Orders])
+Delay %           = DIVIDE(CALCULATE([Total Orders], orders[Delivery_Status] = "Delayed"), [Total Orders])
+Cancellation %    = DIVIDE(CALCULATE([Total Orders], orders[Delivery_Status] = "Cancelled"), [Total Orders])
+Avg Rating        = AVERAGE(orders[Rating])
+Revenue MoM %     = VAR cur  = [Total Revenue]
+                    VAR prev = CALCULATE([Total Revenue], DATEADD(DateTable[Date], -1, MONTH))
+                    RETURN DIVIDE(cur - prev, prev)
 
-## 5. Dashboard Layout (3 pages)
-
-**Page 1 - Executive Overview**
-- KPI cards: Total Orders, Total Revenue, Avg Order Value, On-Time %, Avg Rating, Cancellation %
-- Line chart: Total Revenue by Month
-- Clustered bar: Revenue by City
-- Donut: Revenue by Category
-- Column chart: Orders by Customer Segment
-- Slicers: Month, City, Category
-
-**Page 2 - Delivery Performance**
-- Gauge: On-Time % (target 80%)
-- Bar chart: Avg Delivery Time by City
-- Column chart: Orders and Delay % by Order_Hour (use Line and clustered column chart)
-- Heat-map matrix: City (rows) x Weekday (columns), value = Delay %, with conditional formatting
-- Scatter: Prep time vs Travel time per Store
-- Table: Top 10 stores with highest Delay %
-
-**Page 3 - Customer & Revenue Insights**
-- Clustered column: Avg Rating by Delivery_Status
-- Stacked bar: Payment_Mode by Customer_Segment
-- Treemap: Revenue by Category
-- Bar: Discount % by Customer_Segment
-- Decomposition tree: Delay % broken by City > Store > Hour (AI visual)
-- Map: Orders by City (filled map).
-
-## 6. Insights to Mention in Your PPT
-(Check these against your own visuals before presenting - read the actual numbers from your dashboard.)
-- Delays rise during lunch (12-13h) and dinner (19-21h) peaks because prep time increases.
-- Metro cities (Bengaluru, Mumbai) have the longest average delivery times; Prayagraj has the shortest.
-- Delayed orders get noticeably lower ratings than on-time orders.
-- New customers get the highest discount rate.
-- Groceries and Fruits & Vegetables lead in order volume; Electronics has the highest order value.
+🔍 Key Insights
+KPI	Value
+Total orders	8,000
+Net revenue	₹33.4 lakh
+Average order value	₹428
+On-time delivery	75.2%
+Delayed / Cancelled	22.2% / 2.6%
+Average rating	4.14
+Delays follow meal-time peaks. Delay % jumps to about 36–37% at lunch (12:00–13:00) and dinner (19:00–21:00), compared with roughly 11–16% in off-peak hours.
+Delays hurt ratings. Delayed orders average 3.28 stars against 4.40 for on-time orders, a drop of more than one star.
+Bengaluru and Mumbai are the slowest. Bengaluru averages 18.5 minutes and Mumbai 18.1, while Prayagraj averages 14.9. Bengaluru's delay % stays around 30–35% on every weekday.
+Revenue is concentrated. Mumbai (₹7.4L) and Delhi (₹6.1L) lead the cities; Groceries (₹7.0L) and Electronics (₹6.9L) lead the categories. Electronics has by far the highest average order value (about ₹1,768).
+New customers get the biggest discounts. Discounts are 10.7% of order value for New, 6.2% for Regular and 4.5% for Premium customers.
+Regular customers drive volume: 54% of orders, with 26% New and 20% Premium. UPI is the most used payment mode at 56%.
